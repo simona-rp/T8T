@@ -90,6 +90,32 @@ print(tweets.describe(include='all'))
 # 3 sentiments
 # id_topic and id_sentiment?
 
+# count_missing function
+def count_missing(df, feature_name):
+
+    # Count number of missing value in the feature from a specific dataframe.
+    missing_count = df[feature_name].isnull().sum()
+    return print(f"The feature '{feature_name}' has ", missing_count, " missing values.") 
+
+# count_duplicate function
+def count_duplicate(df, feature_name):
+
+    # Count the sum of duplicate value in the feature from a specific dataframe.
+    duplicate_sum = df.duplicated(subset=[feature_name], keep='last').sum()
+
+    return print(f"The feature '{feature_name}' has ", duplicate_sum, " duplicates.") 
+
+# top_duplicate function
+def top_duplicate(df, feature_name):
+
+    # Count values of each duplicate  
+    duplicate_count = df[feature_name].value_counts()
+    # Output the top 10 duplicates and their counts
+    top_duplicates = duplicate_count.head(10)
+
+    return print("The top 10 values with most duplicates:\n"
+    ,top_duplicates)
+
 # Sentiment
 sent = tweets.groupby(['sentiment'])['sentiment'].count()
 print(sent)
@@ -120,3 +146,28 @@ created_w = tweets.groupby(tweets['created'].dt.isocalendar().week)['tweet_id'].
 # By weekday
 created_d = tweets.groupby(tweets['created'].dt.isocalendar().day)['tweet_id'].count()
 print(created_y, created_my, created_w, created_d)
+
+# Source_id
+# determine frequency distribution of source_id
+source_id = tweets.groupby(['source_id'])['source_id'].count().sort_values(ascending=False)
+print(source_id)
+# determine missing value in source_id
+    count_missing(tweets,'source_id')
+    # There are 1401 observations with missing value
+        # source_id is an identifier for 'brandwatch' social media analytics tool
+            filtered_brandwatch = tweets[tweets['source'] == 'brandwatch']
+            count_missing(filtered_brandwatch,'source_id')
+            # There is no missing value for source_id, when source is brandwatch. 
+# determine duplicate value in source_id
+    count_duplicate(tweets,'source_id')
+    top_duplicate(tweets,'source_id')
+    # There are 2484 duplicates in source_id and no significant value of duplicates.
+
+# Relevant
+# determine frequency distribution of relevant
+    relevant = tweets.groupby(['relevant'])['relevant'].count().sort_values(ascending=False)
+    print(relevant)
+    # There is only one value "True" in this feature.
+# determine missing value in relevant
+    count_missing(tweets,'relevant')
+    # There is no missing value in this feature.
