@@ -133,25 +133,25 @@ lang = tweets.groupby(['language'])['language'].count()
 source_id = tweets.groupby(['source_id'])['source_id'].count().sort_values(ascending=False)
 print(source_id)
 # determine missing value in source_id
-    count_missing(tweets,'source_id')
-    # There are 1401 observations with missing value
-        # source_id is an identifier for 'brandwatch' social media analytics tool
-            filtered_brandwatch = tweets[tweets['source'] == 'brandwatch']
-            count_missing(filtered_brandwatch,'source_id')
-            # There is no missing value for source_id, when source is brandwatch. 
+count_missing(tweets,'source_id')
+# There are 1401 observations with missing value
+# source_id is an identifier for 'brandwatch' social media analytics tool
+filtered_brandwatch = tweets[tweets['source'] == 'brandwatch']
+count_missing(filtered_brandwatch,'source_id')
+# There is no missing value for source_id, when source is brandwatch.
 # determine duplicate value in source_id
-    count_duplicate(tweets,'source_id')
-    top_duplicate(tweets,'source_id')
-    # There are 2484 duplicates in source_id and no significant value of duplicates.
+count_duplicate(tweets,'source_id')
+top_duplicate(tweets,'source_id')
+# There are 2484 duplicates in source_id and no significant value of duplicates.
 
 # Relevant
 # determine frequency distribution of relevant
-    relevant = tweets.groupby(['relevant'])['relevant'].count().sort_values(ascending=False)
-    print(relevant)
-    # There is only one value "True" in this feature.
+relevant = tweets.groupby(['relevant'])['relevant'].count().sort_values(ascending=False)
+#print(relevant)
+# There is only one value "True" in this feature.
 # determine missing value in relevant
-    count_missing(tweets,'relevant')
-    # There is no missing value in this feature.
+count_missing(tweets,'relevant')
+# There is no missing value in this feature.
 
 # Created
 created_desc = tweets['created'].describe(percentiles = [])
@@ -328,5 +328,23 @@ tweets_channel_desc = tweets.groupby(['flag_channel'])['tweet_id'].count()
 
 thameslink_routes = pd.read_csv('thameslink_routes.csv')
 thameslink_routes = pd.DataFrame(thameslink_routes)
-tweets['station'] = np.select(thameslink_routes['station'].isnin(tweets['text']))
+thameslink_lines = pd.read_csv('thameslink_lines.csv')
+thameslink_lines = pd.DataFrame(thameslink_lines)
 
+tweets['flag_station'] = tweets['text'].apply(lambda x: next((word for word in thameslink_routes['station'] if word.lower() in x.lower()), 'NaN'))
+station_count = tweets.groupby(['flag_station'])['flag_station'].count()
+# Missing values = 11.734
+pd.set_option('display.max_rows', 1000)
+
+tweets['flag_line'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['line'] if word.lower() in x.lower()), 'NaN'))
+tweets['flag_line_start'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['start'] if word.lower() in x.lower()), 'NaN'))
+tweets['flag_line_end'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['end'] if word.lower() in x.lower()), 'NaN'))
+line_count = tweets.groupby(['flag_line'])['flag_line'].count()
+# Missing values = 16.941 > only 3 lines Bedford-Brighton (4), Cambridge-Brighton (2), Luton-Rainham (2)
+line_count2 = tweets.groupby(['flag_line_start'])['flag_line'].count()
+# Missing values = 13.717
+line_count3 = tweets.groupby(['flag_line_end'])['flag_line'].count()
+# Missing values =14.298
+
+text_dups = tweets.groupby(['text'])['text']
+print(text_dups)
