@@ -96,14 +96,6 @@ def count_missing(df, feature_name):
     missing_count = df[feature_name].isnull().sum()
     return print(f"The feature '{feature_name}' has ", missing_count, " missing values.") 
 
-# count_duplicate function
-def count_duplicate(df, feature_name):
-
-    # Count the sum of duplicate value in the feature from a specific dataframe.
-    duplicate_sum = df.duplicated(subset=[feature_name], keep='last').sum()
-
-    return print(f"The feature '{feature_name}' has ", duplicate_sum, " duplicates.") 
-
 # top_duplicate function
 def top_duplicate(df, feature_name):
 
@@ -129,29 +121,56 @@ lang = tweets.groupby(['language'])['language'].count()
 # Only English
 
 # Source_id
-# determine frequency distribution of source_id
 source_id = tweets.groupby(['source_id'])['source_id'].count().sort_values(ascending=False)
-print(source_id)
-# determine missing value in source_id
+source_id_desc = tweets['source_id'].nunique()
+# 14464 unique values -> 2484 duplicates, no significant duplicate
 count_missing(tweets,'source_id')
-# There are 1401 observations with missing value
+# 1401 missing values
 # source_id is an identifier for 'brandwatch' social media analytics tool
 filtered_brandwatch = tweets[tweets['source'] == 'brandwatch']
 count_missing(filtered_brandwatch,'source_id')
-# There is no missing value for source_id, when source is brandwatch.
-# determine duplicate value in source_id
-count_duplicate(tweets,'source_id')
-top_duplicate(tweets,'source_id')
-# There are 2484 duplicates in source_id and no significant value of duplicates.
+# no missing value for source_id, when source is brandwatch.
 
 # Relevant
-# determine frequency distribution of relevant
-relevant = tweets.groupby(['relevant'])['relevant'].count().sort_values(ascending=False)
-#print(relevant)
+relevant = tweets.groupby(['relevant'])['relevant'].count()
 # There is only one value "True" in this feature.
-# determine missing value in relevant
 count_missing(tweets,'relevant')
-# There is no missing value in this feature.
+# no missing value
+
+# User_id
+user = tweets.groupby(['user_id'])['user_id'].count()
+# There is only one value "Z003XDCS" in this feature.
+# Possibly this is a user_id of Thameslink admin.
+count_missing(tweets,'user_id')
+# no missing value
+
+# Ground_truth
+ground = tweets.groupby(['ground_truth'])['ground_truth'].count()
+print(ground)
+# There is only one value "True" in this feature.
+count_missing(tweets,'ground_truth')
+# no missing value
+
+# Id_topic
+id_topic = tweets.groupby(['id_topic'])['id_topic'].count().sort_values(ascending=False)
+id_topic_desc = tweets['id_topic'].nunique()
+# 16711 unique values -> 238 duplicates, no significant duplicate
+# One tweet can have several 'topics' associated.
+# One id_topic represents one unique topic from one tweet with unique tweet_id
+# 16711 unique topics from 15749 tweets with unique tweet_id
+count_missing(tweets,'id_topic')
+# no missing value
+
+# Id_sentiment
+id_sentiment = tweets.groupby(['id_sentiment'])['id_sentiment'].count().sort_values(ascending=False)
+id_sentiment_desc = tweets['id_sentiment'].nunique()
+print(id_sentiment_desc)
+# 15781 unique values -> 1168 duplicates, no significant duplicate
+# One tweet can have several 'sentiment' associated.
+# Several topics in the same tweet can have the same sentiment and possess the same id_sentiment
+# For example, complaint about table, door, ACc have negative sentiment, so all of them have the same id_sentiment
+count_missing(tweets,'id_sentiment')
+# no missing value
 
 # Created
 created_desc = tweets['created'].describe(percentiles = [])
@@ -168,7 +187,7 @@ tweets['month'] = pd.Categorical(tweets.created.dt.strftime('%B'), categories = 
 tweets['year'] = pd.Categorical(tweets.created.dt.strftime('%Y'), ordered = True)
 tweets['week'] = pd.Categorical(tweets.created.dt.isocalendar().week, ordered = True)
 tweets['weekday'] = pd.Categorical(tweets.created.dt.strftime('%A'), categories = weekdays, ordered = True)
-#print(tweets[['created','months','year','week','weekday']])
+#print(tweets[['created','month','year','week','weekday']])
 
 # Tweet IDs
 # Check counts of tweet_id
@@ -348,3 +367,57 @@ line_count3 = tweets.groupby(['flag_line_end'])['flag_line'].count()
 
 text_dups = tweets.groupby(['text'])['text']
 print(text_dups)
+
+# Topic
+topic = tweets.groupby(['topic'])['topic'].count().sort_values(ascending=False)
+topic_desc = tweets['topic'].nunique()
+# 23 Unique topics (delays: 9023, none: 2304, service: 884, station: 754, ..., brakes: 44, roof: 15, handrails: 2)
+count_missing(tweets,'topic')
+# no missing value
+
+# Most frequent topic by year
+created_topic_y = tweets.groupby(['year', 'topic']).size().reset_index(name='count').sort_values(by=['year', 'count'], ascending=[True, False])
+# 'Delays' is the most frequent in both years by far, followed by 'none'. 'Covid' is 3rd in 2020.
+# Most frequent topic by month and year
+created_topic_my = tweets.groupby(['year', 'month', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year', 'month', 'count'], ascending=[True, True, False]).groupby(['year', 'month']).head(1)
+# 'Delays' is the most prominent topic throughout 2019. In 2020, 'Delays' and 'Covid' are most frequent.
+# Most frequent topic by weekday
+created_topic_dy = tweets.groupby(['year','weekday', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year','weekday', 'count'], ascending=[True, True, False]).groupby(['year', 'weekday']).head(1)
+# Most frequent weekday by topic
+created_topic_d = tweets.groupby(['topic', 'weekday']).size().reset_index(name='count').sort_values(by=['topic', 'count'],
+    ascending=[False, False]).groupby(['topic']).head(1).sort_values(by='count', ascending=False)
+# Delays are reported the most on Wednesday, All topics are most reported during weekdays.
+
+# Number of topics per tweet
+topic_tweet = tweets.groupby(['tweet_id'])['topic'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+# Most number of topics for one tweet is 4.
+topic_tweet_sum = topic_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# Tweets with 4 topics = 3 (0.02%), Tweets with 3 topics = 52 (0.3%), Tweets with 2 topics = 849 (5.5%), 96% has 1 topic per tweet.
+#barchart_y = sns.barplot(data=topic_tweet_sum, x='count', y='sum', hue='year', palette='dark:#E21185')
+#barchart_y.set(xlabel='Number of topics per tweet', ylabel='Number of tweets', title='Number of topics per tweet')
+
+
+# Sentiment
+sentiment = tweets.groupby(['sentiment'])['topic'].count().sort_values(ascending=False)
+sentiment_desc = tweets['sentiment'].nunique()
+# 3 Sentiments ; Negative: 10628 (64.4%) , Neutral: 6079 (36.9%) , Positive: 272 (1.6%)
+count_missing(tweets,'sentiment')
+# no missing value
+
+# Number of sentiments per tweet/topic
+sentiment_tweet = tweets.groupby(['tweet_id'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_tweet_sum = sentiment_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 32 Tweets with 2 sentiments, other than that one sentiment per tweet.
+sentiment_topic = tweets.groupby(['id_topic'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_topic_sum = sentiment_topic.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 20 Unique topics with 2 sentiments, other than that one sentiment per unique topic.
+
+# Sentiment associated with topics
+sentimental_topic = tweets.groupby(['topic', 'sentiment'])['sentiment'].count().sort_values(ascending=False)
+print(sentimental_topic)
+# Delays: negative: 5851, neutral: 3156
+# None: neutral: 1206, negative: 1053, positive: 45
+# Service: negative: 605, neutral: 249, ...
+
