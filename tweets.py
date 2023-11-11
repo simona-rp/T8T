@@ -137,6 +137,41 @@ relevant = tweets.groupby(['relevant'])['relevant'].count()
 count_missing(tweets,'relevant')
 # no missing value
 
+# User_id
+user = tweets.groupby(['user_id'])['user_id'].count()
+# There is only one value "Z003XDCS" in this feature.
+# Possibly this is a user_id of Thameslink admin.
+count_missing(tweets,'user_id')
+# no missing value
+
+# Ground_truth
+ground = tweets.groupby(['ground_truth'])['ground_truth'].count()
+print(ground)
+# There is only one value "True" in this feature.
+count_missing(tweets,'ground_truth')
+# no missing value
+
+# Id_topic
+id_topic = tweets.groupby(['id_topic'])['id_topic'].count().sort_values(ascending=False)
+id_topic_desc = tweets['id_topic'].nunique()
+# 16711 unique values -> 238 duplicates, no significant duplicate
+# One tweet can have several 'topics' associated.
+# One id_topic represents one unique topic from one tweet with unique tweet_id
+# 16711 unique topics from 15749 tweets with unique tweet_id
+count_missing(tweets,'id_topic')
+# no missing value
+
+# Id_sentiment
+id_sentiment = tweets.groupby(['id_sentiment'])['id_sentiment'].count().sort_values(ascending=False)
+id_sentiment_desc = tweets['id_sentiment'].nunique()
+print(id_sentiment_desc)
+# 15781 unique values -> 1168 duplicates, no significant duplicate
+# One tweet can have several 'sentiment' associated.
+# Several topics in the same tweet can have the same sentiment and possess the same id_sentiment
+# For example, complaint about table, door, ACc have negative sentiment, so all of them have the same id_sentiment
+count_missing(tweets,'id_sentiment')
+# no missing value
+
 # Created
 created_desc = tweets['created'].describe(percentiles = [])
 created_na = tweets['created'].isnull().sum()
@@ -152,7 +187,7 @@ tweets['month'] = pd.Categorical(tweets.created.dt.strftime('%B'), categories = 
 tweets['year'] = pd.Categorical(tweets.created.dt.strftime('%Y'), ordered = True)
 tweets['week'] = pd.Categorical(tweets.created.dt.isocalendar().week, ordered = True)
 tweets['weekday'] = pd.Categorical(tweets.created.dt.strftime('%A'), categories = weekdays, ordered = True)
-#print(tweets[['created','months','year','week','weekday']])
+#print(tweets[['created','month','year','week','weekday']])
 
 # Tweet IDs
 # Check counts of tweet_id
