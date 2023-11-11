@@ -367,3 +367,57 @@ line_count3 = tweets.groupby(['flag_line_end'])['flag_line'].count()
 
 text_dups = tweets.groupby(['text'])['text']
 print(text_dups)
+
+# Topic
+topic = tweets.groupby(['topic'])['topic'].count().sort_values(ascending=False)
+topic_desc = tweets['topic'].nunique()
+# 23 Unique topics (delays: 9023, none: 2304, service: 884, station: 754, ..., brakes: 44, roof: 15, handrails: 2)
+count_missing(tweets,'topic')
+# no missing value
+
+# Most frequent topic by year
+created_topic_y = tweets.groupby(['year', 'topic']).size().reset_index(name='count').sort_values(by=['year', 'count'], ascending=[True, False])
+# 'Delays' is the most frequent in both years by far, followed by 'none'. 'Covid' is 3rd in 2020.
+# Most frequent topic by month and year
+created_topic_my = tweets.groupby(['year', 'month', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year', 'month', 'count'], ascending=[True, True, False]).groupby(['year', 'month']).head(1)
+# 'Delays' is the most prominent topic throughout 2019. In 2020, 'Delays' and 'Covid' are most frequent.
+# Most frequent topic by weekday
+created_topic_dy = tweets.groupby(['year','weekday', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year','weekday', 'count'], ascending=[True, True, False]).groupby(['year', 'weekday']).head(1)
+# Most frequent weekday by topic
+created_topic_d = tweets.groupby(['topic', 'weekday']).size().reset_index(name='count').sort_values(by=['topic', 'count'],
+    ascending=[False, False]).groupby(['topic']).head(1).sort_values(by='count', ascending=False)
+# Delays are reported the most on Wednesday, All topics are most reported during weekdays.
+
+# Number of topics per tweet
+topic_tweet = tweets.groupby(['tweet_id'])['topic'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+# Most number of topics for one tweet is 4.
+topic_tweet_sum = topic_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# Tweets with 4 topics = 3 (0.02%), Tweets with 3 topics = 52 (0.3%), Tweets with 2 topics = 849 (5.5%), 96% has 1 topic per tweet.
+#barchart_y = sns.barplot(data=topic_tweet_sum, x='count', y='sum', hue='year', palette='dark:#E21185')
+#barchart_y.set(xlabel='Number of topics per tweet', ylabel='Number of tweets', title='Number of topics per tweet')
+
+
+# Sentiment
+sentiment = tweets.groupby(['sentiment'])['topic'].count().sort_values(ascending=False)
+sentiment_desc = tweets['sentiment'].nunique()
+# 3 Sentiments ; Negative: 10628 (64.4%) , Neutral: 6079 (36.9%) , Positive: 272 (1.6%)
+count_missing(tweets,'sentiment')
+# no missing value
+
+# Number of sentiments per tweet/topic
+sentiment_tweet = tweets.groupby(['tweet_id'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_tweet_sum = sentiment_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 32 Tweets with 2 sentiments, other than that one sentiment per tweet.
+sentiment_topic = tweets.groupby(['id_topic'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_topic_sum = sentiment_topic.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 20 Unique topics with 2 sentiments, other than that one sentiment per unique topic.
+
+# Sentiment associated with topics
+sentimental_topic = tweets.groupby(['topic', 'sentiment'])['sentiment'].count().sort_values(ascending=False)
+print(sentimental_topic)
+# Delays: negative: 5851, neutral: 3156
+# None: neutral: 1206, negative: 1053, positive: 45
+# Service: negative: 605, neutral: 249, ...
+
