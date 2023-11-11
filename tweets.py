@@ -96,14 +96,6 @@ def count_missing(df, feature_name):
     missing_count = df[feature_name].isnull().sum()
     return print(f"The feature '{feature_name}' has ", missing_count, " missing values.") 
 
-# count_duplicate function
-def count_duplicate(df, feature_name):
-
-    # Count the sum of duplicate value in the feature from a specific dataframe.
-    duplicate_sum = df.duplicated(subset=[feature_name], keep='last').sum()
-
-    return print(f"The feature '{feature_name}' has ", duplicate_sum, " duplicates.") 
-
 # top_duplicate function
 def top_duplicate(df, feature_name):
 
