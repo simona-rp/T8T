@@ -121,29 +121,21 @@ lang = tweets.groupby(['language'])['language'].count()
 # Only English
 
 # Source_id
-# determine frequency distribution of source_id
 source_id = tweets.groupby(['source_id'])['source_id'].count().sort_values(ascending=False)
-print(source_id)
-# determine missing value in source_id
+source_id_desc = tweets['source_id'].nunique()
+# 14464 unique values -> 2484 duplicates, no significant duplicate
 count_missing(tweets,'source_id')
-# There are 1401 observations with missing value
+# 1401 missing values
 # source_id is an identifier for 'brandwatch' social media analytics tool
 filtered_brandwatch = tweets[tweets['source'] == 'brandwatch']
 count_missing(filtered_brandwatch,'source_id')
-# There is no missing value for source_id, when source is brandwatch.
-# determine duplicate value in source_id
-count_duplicate(tweets,'source_id')
-top_duplicate(tweets,'source_id')
-# There are 2484 duplicates in source_id and no significant value of duplicates.
+# no missing value for source_id, when source is brandwatch.
 
 # Relevant
-# determine frequency distribution of relevant
-relevant = tweets.groupby(['relevant'])['relevant'].count().sort_values(ascending=False)
-#print(relevant)
+relevant = tweets.groupby(['relevant'])['relevant'].count()
 # There is only one value "True" in this feature.
-# determine missing value in relevant
 count_missing(tweets,'relevant')
-# There is no missing value in this feature.
+# no missing value
 
 # Created
 created_desc = tweets['created'].describe(percentiles = [])
