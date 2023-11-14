@@ -1,7 +1,10 @@
 import pandas as pd, matplotlib.pyplot as plt, seaborn as sns, numpy as np
 from sqlalchemy import create_engine
 from datetime import datetime
-import json
+from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+import json, nltk, re, warnings
+# Ignore warnings for future function changes
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # To see all columns
 pd.set_option('display.max_columns', None)
@@ -39,15 +42,16 @@ data_labels_sentiment = data_labels_sentiment.rename(columns={'tweet_id': 'tweet
 tweets = pd.concat([data_level0, data_labels_topic, data_labels_sentiment], axis=1, join='inner')
 
 # Check for duplicates
-#print(tweets['id'].equals(tweets['tweet_id_topic']))
-#print(tweets['id'].equals(tweets['tweet_id_sentiment']))
-#print(tweets['tweet_id_topic'].equals(tweets['tweet_id_topic']))
+# Check for duplicates
+tweets['id'].equals(tweets['tweet_id_topic'])
+tweets['id'].equals(tweets['tweet_id_sentiment'])
+tweets['tweet_id_topic'].equals(tweets['tweet_id_topic'])
 # id, tweet_id_topic and tweet_id_sentiment are duplicates, keep one as  tweet_id
-#print(tweets['user_id_topic'].equals(tweets['user_id_sentiment']))
+tweets['user_id_topic'].equals(tweets['user_id_sentiment'])
 # user_id_topic and user_id_sentiment are duplicates, keep one as user_id
-#print(tweets['id_topic'].equals(tweets['id_sentiment']))
+tweets['id_topic'].equals(tweets['id_sentiment'])
 # not duplicates, keep both
-#print(tweets['ground_truth_topic'].equals(tweets['ground_truth_sentiment']))
+tweets['ground_truth_topic'].equals(tweets['ground_truth_sentiment'])
 # ground_truth_topic and ground_truth_sentiment are duplicates, keep one as ground_truth
 
 tweets = tweets.loc[:, tweets.columns.drop(['tweet_id_topic',
@@ -67,7 +71,6 @@ types = tweets.dtypes
 
 # Convert source_created_at to datetime
 tweets['created'] = pd.to_datetime(tweets['created'], format='mixed').apply(lambda x: x.replace(microsecond=0))
-#print(type(tweets['created']))
 
 # Setup connection to MySQL database
 engine = create_engine('mysql+pymysql://HTW:mysql@localhost/tweets')
@@ -117,8 +120,7 @@ sour = tweets.groupby(['source'])['source'].count()
 
 # Language
 lang = tweets.groupby(['language'])['language'].count()
-# en-GB = 10.051, en = 6.898
-# Only English
+# en-GB = 10.051, en = 6.898 > only English
 
 # Source_id
 source_id = tweets.groupby(['source_id'])['source_id'].count().sort_values(ascending=False)
@@ -175,7 +177,6 @@ count_missing(tweets,'id_sentiment')
 # Created
 created_desc = tweets['created'].describe(percentiles = [])
 created_na = tweets['created'].isnull().sum()
-#print(created_desc, created_na)
 # No missing values
 # range from 16.01.2019 to 01.12.2020
 
@@ -187,26 +188,25 @@ tweets['month'] = pd.Categorical(tweets.created.dt.strftime('%B'), categories = 
 tweets['year'] = pd.Categorical(tweets.created.dt.strftime('%Y'), ordered = True)
 tweets['week'] = pd.Categorical(tweets.created.dt.isocalendar().week, ordered = True)
 tweets['weekday'] = pd.Categorical(tweets.created.dt.strftime('%A'), categories = weekdays, ordered = True)
-#print(tweets[['created','month','year','week','weekday']])
 
 # Tweet IDs
 # Check counts of tweet_id
 # By year
 created_y = tweets.groupby(['year'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
-#barchart_y = sns.barplot(data=created_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
-#barchart_y.set(xlabel='Year created', ylabel='Number of tweets', title='Number of tweets per year')
+barchart_y = sns.barplot(data=created_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
+barchart_y.set(xlabel='Year created', ylabel='Number of tweets', title='Number of tweets per year')
 # By month and year
 created_my = tweets.groupby(['year', 'month'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
-#barchart_my = sns.barplot(data=created_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_my.set(xlabel='Month created', ylabel='Number of tweets', title='Number of tweets per month')
+# barchart_my = sns.barplot(data=created_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_my.set(xlabel='Month created', ylabel='Number of tweets', title='Number of tweets per month')
 # By calendar week
 created_wy = tweets.groupby(['year','week'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
-#barchart_wy = sns.barplot(data=created_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_wy.set(xlabel='Week created', ylabel='Number of tweets', title='Number of tweets per week')
+# barchart_wy = sns.barplot(data=created_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_wy.set(xlabel='Week created', ylabel='Number of tweets', title='Number of tweets per week')
 # By weekday
 created_dy = tweets.groupby(['year','weekday'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
-#barchart_dy = sns.barplot(data=created_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_dy.set(xlabel='Day created', ylabel='Number of tweets', title='Number of tweets per weekday')
+# barchart_dy = sns.barplot(data=created_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_dy.set(xlabel='Day created', ylabel='Number of tweets', title='Number of tweets per weekday')
 
 # Duplicate tweets
 tweet_id_desc = tweets['tweet_id'].nunique()
@@ -217,9 +217,9 @@ tweet_id_dups = tweets.groupby(['tweet_id'])['tweet_id'].count().to_frame().rena
 tweet_id_dups['bins'] = np.digitize(tweet_id_dups['count'], bins = [2,3,4,5,6,7])
 tweet_id_bincount = np.bincount(tweet_id_dups['bins'])
 tweet_id_bins = ['1', '2', '3', '4', '5', '6', '>6']
-#barplot_tweet = sns.barplot(x = tweet_id_bins, y = tweet_id_bincount, color='#E21185')
-#barplot_tweet.set(xlabel='Number of duplicate tweets', ylabel='Count of number of duplicate tweets', title='Count of the number of duplicate tweets')
-#barplot_tweet.bar_label(barplot_tweet.containers[0])
+# barplot_tweet = sns.barplot(x = tweet_id_bins, y = tweet_id_bincount, color='#E21185')
+# barplot_tweet.set(xlabel='Number of duplicate tweets', ylabel='Count of number of duplicate tweets', title='Count of the number of duplicate tweets')
+# barplot_tweet.bar_label(barplot_tweet.containers[0])
 
 # Authors
 # Number of authors
@@ -230,29 +230,29 @@ auth_na = tweets['author_id'].isnull().sum()
 
 # Number of authors per year
 created_auth_y = tweets.groupby(['year'])['author_id'].count().to_frame().reset_index().rename(columns={'author_id':'count'})
-#barchart_auth_y = sns.barplot(data=created_auth_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
-#barchart_auth_y.set(xlabel='Year created', ylabel='Number of authors', title='Number of authors per year')
+# barchart_auth_y = sns.barplot(data=created_auth_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
+# barchart_auth_y.set(xlabel='Year created', ylabel='Number of authors', title='Number of authors per year')
 # By month and year
 created_auth_my = tweets.groupby(['year', 'month'])['author_id'].count().to_frame().reset_index().rename(columns={'author_id':'count'})
-#barchart_auth_my = sns.barplot(data=created_auth_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_my.set(xlabel='Month created', ylabel='Number of authors', title='Number of authors per month')
+# barchart_auth_my = sns.barplot(data=created_auth_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_my.set(xlabel='Month created', ylabel='Number of authors', title='Number of authors per month')
 # By calendar week
 created_auth_wy = tweets.groupby(['year','week'])['author_id'].count().to_frame().reset_index().rename(columns={'author_id':'count'})
-#barchart_auth_wy = sns.barplot(data=created_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_wy.set(xlabel='Week created', ylabel='Number of authors', title='Number of authors per week')
+# barchart_auth_wy = sns.barplot(data=created_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_wy.set(xlabel='Week created', ylabel='Number of authors', title='Number of authors per week')
 # By weekday
 created_auth_dy = tweets.groupby(['year','weekday'])['author_id'].count().to_frame().reset_index().rename(columns={'author_id':'count'})
-#barchart_auth_dy = sns.barplot(data=created_auth_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_dy.set(xlabel='Day created', ylabel='Number of authors', title='Number of authors per day')
+# barchart_auth_dy = sns.barplot(data=created_auth_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_dy.set(xlabel='Day created', ylabel='Number of authors', title='Number of authors per day')
 
 # Number of tweets per author all time
 auth_all = tweets.groupby(['author_id'])['tweet_id'].count().sort_values (ascending=False).to_frame().reset_index().rename(columns={'tweet_id':'count'})
 auth_all['bins'] = np.digitize(auth_all['count'], bins = [2,3,4,5,6,7,8,9,10,11])
 auth_bincount = np.bincount(auth_all['bins'])
 bins = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '>10']
-#barplot_auth_all = sns.barplot(x = bins, y = auth_bincount, color='#E21185')
-#barplot_auth_all.set(xlabel='Number of tweets per author', ylabel='Count of number of tweets', title='Count of the number of tweets per author')
-#barplot_auth_all.bar_label(barplot_auth_all.containers[0])
+# barplot_auth_all = sns.barplot(x = bins, y = auth_bincount, color='#E21185')
+# barplot_auth_all.set(xlabel='Number of tweets per author', ylabel='Count of number of tweets', title='Count of the number of tweets per author')
+# barplot_auth_all.bar_label(barplot_auth_all.containers[0])
 
 tweet_count_desc = auth_all['count'].describe()
 # Average number of tweets per author = 2.3741
@@ -280,37 +280,37 @@ auth_y_2 = pd.DataFrame({
     'bincount': auth_y_bincount,
     'year': auth_y_year,
     'bins': bins_y*2})
-#barplot_auth_y = sns.barplot(data = auth_y_2, x = 'bins', y = 'bincount', hue='year', color='#E21185')
-#barplot_auth_y.set(xlabel='Number of tweets per author per', ylabel='Count of number of tweets', title='Count of the number of tweets per author per year')
-#for i in barplot_auth_y.containers:
-#    barplot_auth_y.bar_label(i,)
+# barplot_auth_y = sns.barplot(data = auth_y_2, x = 'bins', y = 'bincount', hue='year', color='#E21185')
+# barplot_auth_y.set(xlabel='Number of tweets per author per', ylabel='Count of number of tweets', title='Count of the number of tweets per author per year')
+# for i in barplot_auth_y.containers:
+#     barplot_auth_y.bar_label(i,)
 
 # Average number of tweets per author per year
 auth_y = tweets.groupby(['year','author_id'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
 upper_y = auth_y['count'].mean()+3*auth_y['count'].std()
 auth_y = auth_y[(auth_y['count']>0) & (auth_y['count']<=upper_y)]
 auth_mean_y = auth_y.groupby(['year']).mean('count').reset_index()
-#barchart_auth_mean_y = sns.barplot(data=auth_mean_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_mean_y.set(xlabel='Year created', ylabel='Average number of tweets per author', title='Average number of tweets per author per year')
+# barchart_auth_mean_y = sns.barplot(data=auth_mean_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_mean_y.set(xlabel='Year created', ylabel='Average number of tweets per author', title='Average number of tweets per author per year')
 # Average number of tweets per author per month and year
 auth_my = tweets.groupby(['year','month','author_id'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
 upper_my = auth_my['count'].mean()+3*auth_my['count'].std()
 auth_my = auth_my[(auth_my['count']>0) & (auth_my['count']<=upper_my)]
 auth_mean_my = auth_my.groupby(['year','month']).mean('count').reset_index()
-#barchart_auth_mean_my = sns.barplot(data=auth_mean_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_mean_my.set(xlabel='Month created', ylabel='Average number of tweets per author', title='Average number of tweets per author per month')
+# barchart_auth_mean_my = sns.barplot(data=auth_mean_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_mean_my.set(xlabel='Month created', ylabel='Average number of tweets per author', title='Average number of tweets per author per month')
 # By calendar week
 auth_wy = tweets.groupby(['year', 'week', 'author_id'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id': 'count'})
 auth_wy = auth_wy[(auth_wy['count'] > 0)]
 auth_mean_wy = auth_wy.groupby(['year', 'week']).mean('count').reset_index()
-#barchart_auth_mean_wy = sns.barplot(data=auth_mean_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_mean_wy.set(xlabel='Week created', ylabel='Average number of tweets per author', title='Average number of tweets per author per week')
+# barchart_auth_mean_wy = sns.barplot(data=auth_mean_wy, x='week', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_mean_wy.set(xlabel='Week created', ylabel='Average number of tweets per author', title='Average number of tweets per author per week')
 # By weekday
 auth_dy = tweets.groupby(['year', 'weekday', 'author_id'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id': 'count'})
 auth_dy = auth_dy[(auth_dy['count'] > 0)]
 auth_mean_dy = auth_dy.groupby(['year', 'weekday']).mean('count').reset_index()
-#barchart_auth_mean_dy = sns.barplot(data=auth_mean_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
-#barchart_auth_mean_dy.set(xlabel='Day created', ylabel='Average number of tweets per author', title='Average number of tweets per weekday')
+# barchart_auth_mean_dy = sns.barplot(data=auth_mean_dy, x='weekday', y='count', hue='year', palette='dark:#E21185', legend = True)
+# barchart_auth_mean_dy.set(xlabel='Day created', ylabel='Average number of tweets per author', title='Average number of tweets per weekday')
 
 # GPS data
 # Longitutde
@@ -365,8 +365,69 @@ line_count2 = tweets.groupby(['flag_line_start'])['flag_line'].count()
 line_count3 = tweets.groupby(['flag_line_end'])['flag_line'].count()
 # Missing values =14.298
 
-text_dups = tweets.groupby(['text'])['text']
-print(text_dups)
+tweets = tweets.astype({'flag_station': 'str',
+                        'flag_line': 'str',
+                        'flag_line_start': 'str',
+                        'flag_line_end': 'str'})
+# Check overall conditions of GPS data
+tweets_loc = tweets.loc[(tweets['flag_station'].str.len() > 0) |
+                        (tweets['flag_line'].str.len() > 0) |
+                        (tweets['flag_line_start'].str.len() > 0) |
+                        (tweets['flag_line_end'].str.len() > 0) |
+                        ((tweets['longitude'].notnull()) & (tweets['latitude'].notnull()))]
+# 8.053 observations with location data
+
+# Tokenize text into words & determine word frequency
+# Download needed packages
+# nltk.download('punkt')
+# nltk.download('wordnet')
+# nltk.download('omw-1.4')
+# nltk.download("stopwords")
+# Separate text
+text = pd.DataFrame(tweets[['text', 'topic', 'sentiment']])
+text['text'] = text['text'].astype(str)
+# Make all text lowercase to identify stopwords
+text['text'] = text['text'].str.lower()
+# Remove non-alphanumeric characters from text
+text['text'] = text['text'].str.replace(r'\W+', ' ', regex=True)
+text['topic'] = text['topic'].str.replace(r'\W+', ' ', regex=True)
+# In the top 100 words, some numbers were included so run the following to remove numeric characters
+text['text'] = text['text'].str.replace(r'\d', ' ', regex=True)
+# Define stopwords in the English language
+sw = nltk.corpus.stopwords.words('english')
+# Remove stopwords from text
+text['text_cleaned'] = text['text'].apply(lambda x: ' '.join([word for word in x.split() if word not in (sw)]))
+# Tokenize text into separate words
+text['tokens'] = text.apply(lambda row: nltk.word_tokenize(row['text_cleaned']), axis=1)
+words = text[['tokens', 'topic', 'sentiment']]
+words = words.explode('tokens').reset_index()
+# Check word counts
+# Overall
+words_gen = words.groupby(['tokens'])['tokens'].count().sort_values(ascending=False).to_frame(name='count').reset_index()
+# Top 100 words
+words_gen_100 = words_gen[words_gen.index <= 100]
+# Without numeric characters
+words_gen_desc = words_gen['count'].describe()
+# Average = 16.27, Standard deviation = 157.80
+upper_w = words_gen['count'].mean()+3*words_gen['count'].std()
+words_out = words_gen[words_gen['count']>upper_w]
+# The outlier words match the top 100 words
+# Create a WordCloud to visualize word frequencies
+cloud_gen_text = words_gen['tokens'].to_string()
+# wordcloud = WordCloud(background_color='white', colormap = 'magma', max_words = 100, width = 800, height = 400).generate(cloud_gen_text)
+# plt.imshow(wordcloud, interpolation='bilinear')
+# plt.axis("off")
+# Per topic & negative sentiment
+words_top = words[words['sentiment']=='negative'].groupby(['topic', 'tokens'])['tokens'].count().sort_values(ascending=False).to_frame(name='count').reset_index()
+words_top5 = words_top.groupby(['topic']).head(5).sort_values(['topic', 'count'], ascending = False)
+cloud_top_text = words[words['sentiment']=='negative'][['topic','tokens']]
+# for x in cloud_top_text.topic.unique():
+#     wc = WordCloud(background_color="white", colormap = 'magma', max_words=10, width = 800, height = 400)
+#     wc.generate(cloud_top_text[(cloud_top_text.topic == x)].tokens.to_string())
+#     plt.imshow(wc)
+#     plt.title(x)
+#     plt.axis("off")
+#     plt.savefig('C:/Users/SimonaPaskaleva/Desktop/Tweets/T8T/wc'+str(x)+'.png')
 
 # Topic
 topic = tweets.groupby(['topic'])['topic'].count().sort_values(ascending=False)
@@ -416,7 +477,6 @@ sentiment_topic_sum = sentiment_topic.groupby(['count']).size().reset_index(name
 
 # Sentiment associated with topics
 sentimental_topic = tweets.groupby(['topic', 'sentiment'])['sentiment'].count().sort_values(ascending=False)
-print(sentimental_topic)
 # Delays: negative: 5851, neutral: 3156
 # None: neutral: 1206, negative: 1053, positive: 45
 # Service: negative: 605, neutral: 249, ...
