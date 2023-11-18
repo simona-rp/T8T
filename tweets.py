@@ -3,6 +3,10 @@ from sqlalchemy import create_engine
 from datetime import datetime
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 import json, nltk, re, warnings
+from nltk.stem.porter import PorterStemmer
+from nltk.stem import WordNetLemmatizer
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer
 # Ignore warnings for future function changes
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -40,7 +44,6 @@ data_labels_sentiment = data_labels_sentiment.rename(columns={'tweet_id': 'tweet
 
 # Merge extracted data
 tweets = pd.concat([data_level0, data_labels_topic, data_labels_sentiment], axis=1, join='inner')
-
 # Check for duplicates
 # Check for duplicates
 tweets['id'].equals(tweets['tweet_id_topic'])
@@ -79,7 +82,7 @@ tweets.to_sql(name='tweets', con=engine, if_exists='replace')
 
 # Data Understanding
 # Summary statistics of the dataset
-tweets.describe(include='all')
+tweets_desc = tweets.describe(include='all')
 # Time period 16.01.2019-01.12.2020
 # Unique author_id = 7.139 > multiple reports by the same authors, author_id = 2589703207 has 715 tweets
 # Unique text = 15.749 > duplicate tweets
@@ -97,7 +100,7 @@ def count_missing(df, feature_name):
 
     # Count number of missing value in the feature from a specific dataframe.
     missing_count = df[feature_name].isnull().sum()
-    return print(f"The feature '{feature_name}' has ", missing_count, " missing values.") 
+    return (f"The feature '{feature_name}' has ", missing_count, " missing values.")
 
 # top_duplicate function
 def top_duplicate(df, feature_name):
@@ -107,7 +110,7 @@ def top_duplicate(df, feature_name):
     # Output the top 10 duplicates and their counts
     top_duplicates = duplicate_count.head(10)
 
-    return print("The top 10 values with most duplicates:\n"
+    return ("The top 10 values with most duplicates:\n"
     ,top_duplicates)
 
 # Sentiment
@@ -148,7 +151,6 @@ count_missing(tweets,'user_id')
 
 # Ground_truth
 ground = tweets.groupby(['ground_truth'])['ground_truth'].count()
-print(ground)
 # There is only one value "True" in this feature.
 count_missing(tweets,'ground_truth')
 # no missing value
@@ -166,7 +168,6 @@ count_missing(tweets,'id_topic')
 # Id_sentiment
 id_sentiment = tweets.groupby(['id_sentiment'])['id_sentiment'].count().sort_values(ascending=False)
 id_sentiment_desc = tweets['id_sentiment'].nunique()
-print(id_sentiment_desc)
 # 15781 unique values -> 1168 duplicates, no significant duplicate
 # One tweet can have several 'sentiment' associated.
 # Several topics in the same tweet can have the same sentiment and possess the same id_sentiment
@@ -193,8 +194,8 @@ tweets['weekday'] = pd.Categorical(tweets.created.dt.strftime('%A'), categories 
 # Check counts of tweet_id
 # By year
 created_y = tweets.groupby(['year'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
-barchart_y = sns.barplot(data=created_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
-barchart_y.set(xlabel='Year created', ylabel='Number of tweets', title='Number of tweets per year')
+# barchart_y = sns.barplot(data=created_y, x='year', y='count', hue='year', palette='dark:#E21185', legend = False)
+# barchart_y.set(xlabel='Year created', ylabel='Number of tweets', title='Number of tweets per year')
 # By month and year
 created_my = tweets.groupby(['year', 'month'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id':'count'})
 # barchart_my = sns.barplot(data=created_my, x='month', y='count', hue='year', palette='dark:#E21185', legend = True)
@@ -327,6 +328,59 @@ lati_na = tweets['latitude'].isnull().sum()
 
 # GPS data not reliable for identifying issue location
 
+# Topic
+topic = tweets.groupby(['topic'])['topic'].count().sort_values(ascending=False)
+topic_desc = tweets['topic'].nunique()
+# 23 Unique topics (delays: 9023, none: 2304, service: 884, station: 754, ..., brakes: 44, roof: 15, handrails: 2)
+count_missing(tweets,'topic')
+# no missing value
+
+# Most frequent topic by year
+created_topic_y = tweets.groupby(['year', 'topic']).size().reset_index(name='count').sort_values(by=['year', 'count'], ascending=[True, False])
+# 'Delays' is the most frequent in both years by far, followed by 'none'. 'Covid' is 3rd in 2020.
+# Most frequent topic by month and year
+created_topic_my = tweets.groupby(['year', 'month', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year', 'month', 'count'], ascending=[True, True, False]).groupby(['year', 'month']).head(1)
+# 'Delays' is the most prominent topic throughout 2019. In 2020, 'Delays' and 'Covid' are most frequent.
+# Most frequent topic by weekday
+created_topic_dy = tweets.groupby(['year','weekday', 'topic']).size().reset_index(name='count')\
+    .sort_values(by=['year','weekday', 'count'], ascending=[True, True, False]).groupby(['year', 'weekday']).head(1)
+# Most frequent weekday by topic
+created_topic_d = tweets.groupby(['topic', 'weekday']).size().reset_index(name='count').sort_values(by=['topic', 'count'],
+    ascending=[False, False]).groupby(['topic']).head(1).sort_values(by='count', ascending=False)
+# Delays are reported the most on Wednesday, All topics are most reported during weekdays.
+
+# Number of topics per tweet
+topic_tweet = tweets.groupby(['tweet_id'])['topic'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+# Most number of topics for one tweet is 4.
+topic_tweet_sum = topic_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# Tweets with 4 topics = 3 (0.02%), Tweets with 3 topics = 52 (0.3%), Tweets with 2 topics = 849 (5.5%), 96% has 1 topic per tweet.
+#barchart_y = sns.barplot(data=topic_tweet_sum, x='count', y='sum', hue='year', palette='dark:#E21185')
+#barchart_y.set(xlabel='Number of topics per tweet', ylabel='Number of tweets', title='Number of topics per tweet')
+
+
+# Sentiment
+sentiment = tweets.groupby(['sentiment'])['topic'].count().sort_values(ascending=False)
+sentiment_desc = tweets['sentiment'].nunique()
+# 3 Sentiments ; Negative: 10628 (64.4%) , Neutral: 6079 (36.9%) , Positive: 272 (1.6%)
+count_missing(tweets,'sentiment')
+# no missing value
+
+# Number of sentiments per tweet/topic
+sentiment_tweet = tweets.groupby(['tweet_id'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_tweet_sum = sentiment_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 32 Tweets with 2 sentiments, other than that one sentiment per tweet.
+sentiment_topic = tweets.groupby(['id_topic'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
+sentiment_topic_sum = sentiment_topic.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
+# 20 Unique topics with 2 sentiments, other than that one sentiment per unique topic.
+
+# Sentiment associated with topics
+sentimental_topic = tweets.groupby(['topic', 'sentiment'])['sentiment'].count().sort_values(ascending=False)
+# Delays: negative: 5851, neutral: 3156
+# None: neutral: 1206, negative: 1053, positive: 45
+# Service: negative: 605, neutral: 249, ...
+
+
 # Text
 # Twitter channel
 conditions = [tweets['text'].str.contains('@GatwickExpress'),
@@ -337,32 +391,41 @@ conditions = [tweets['text'].str.contains('@GatwickExpress'),
 flag_names = dict(flag_id = [1,2,3,4],
                   flag = ['@GatwickExpress','@GNRailUK','@SouthernRailUK','@TLRailUK'])
 
-tweets['flag_channel'] = np.select(conditions, flag_names['flag_id'], default = 0)
-tweets_channel_desc = tweets.groupby(['flag_channel'])['tweet_id'].count()
+tweets['flag_channel'] = np.select(conditions, flag_names['flag'], default = 'None')
+tweets_channel_desc = tweets.groupby(['flag_channel'])['tweet_id'].count().to_frame().reset_index().rename(columns={'tweet_id': 'count'})
 # No specific channel = 5.641
 # GatwickExpress = 215
 # GNRailUK = 398
 # SouthernRailUK = 644
 # TLRailUK = 10.051 > most used channel
+# barchart_chan = sns.barplot(data=tweets_channel_desc, x='flag_channel', y='count', color='#E21185')
+# barchart_chan.set(xlabel='Twitter channel', ylabel='Number of tweets', title='Tweets per twitter channel')
+
 
 thameslink_routes = pd.read_csv('thameslink_routes.csv')
 thameslink_routes = pd.DataFrame(thameslink_routes)
 thameslink_lines = pd.read_csv('thameslink_lines.csv')
 thameslink_lines = pd.DataFrame(thameslink_lines)
 
-tweets['flag_station'] = tweets['text'].apply(lambda x: next((word for word in thameslink_routes['station'] if word.lower() in x.lower()), 'NaN'))
-station_count = tweets.groupby(['flag_station'])['flag_station'].count()
+tweets['flag_station'] = tweets['text'].apply(lambda x: next((word for word in thameslink_routes['station'] if word.lower() in x.lower()), ''))
+station_count = tweets.groupby(['flag_station'])['tweet_id'].count().sort_values(ascending=False).to_frame().reset_index().rename(columns={'tweet_id': 'count'})
+# barchart_chan = sns.barplot(data=station_count, x='flag_station', y='count', color='#E21185')
+# barchart_chan.set(xlabel='Station', ylabel='Number of tweets', title='Tweets per station')
 # Missing values = 11.734
 pd.set_option('display.max_rows', 1000)
 
-tweets['flag_line'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['line'] if word.lower() in x.lower()), 'NaN'))
-tweets['flag_line_start'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['start'] if word.lower() in x.lower()), 'NaN'))
-tweets['flag_line_end'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['end'] if word.lower() in x.lower()), 'NaN'))
+tweets['flag_line'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['line'] if word.lower() in x.lower()), ''))
+tweets['flag_line_start'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['start'] if word.lower() in x.lower()), ''))
+tweets['flag_line_end'] = tweets['text'].apply(lambda x: next((word for word in thameslink_lines['end'] if word.lower() in x.lower()), ''))
 line_count = tweets.groupby(['flag_line'])['flag_line'].count()
 # Missing values = 16.941 > only 3 lines Bedford-Brighton (4), Cambridge-Brighton (2), Luton-Rainham (2)
-line_count2 = tweets.groupby(['flag_line_start'])['flag_line'].count()
+line_count2 = tweets[tweets['flag_line_start'].str.len()>0].groupby(['flag_line_start'])['tweet_id'].count().sort_values(ascending=False).to_frame().reset_index().rename(columns={'tweet_id': 'count'}).head(5)
+# barchart_c2 = sns.barplot(data=line_count2, x='flag_line_start', y='count', color='#E21185')
+# barchart_2.set(xlabel='Line start', ylabel='Number of tweets', title='Tweets per line start')
 # Missing values = 13.717
-line_count3 = tweets.groupby(['flag_line_end'])['flag_line'].count()
+line_count3 = tweets[tweets['flag_line_end'].str.len()>0].groupby(['flag_line_end'])['tweet_id'].count().sort_values(ascending=False).to_frame().reset_index().rename(columns={'tweet_id': 'count'}).head(5)
+# barchart_c3 = sns.barplot(data=line_count3, x='flag_line_end', y='count', color='#E21185')
+# barchart_c3.set(xlabel='Line end', ylabel='Number of tweets', title='Tweets per line end')
 # Missing values =14.298
 
 tweets = tweets.astype({'flag_station': 'str',
@@ -429,55 +492,79 @@ cloud_top_text = words[words['sentiment']=='negative'][['topic','tokens']]
 #     plt.axis("off")
 #     plt.savefig('C:/Users/SimonaPaskaleva/Desktop/Tweets/T8T/wc'+str(x)+'.png')
 
-# Topic
-topic = tweets.groupby(['topic'])['topic'].count().sort_values(ascending=False)
-topic_desc = tweets['topic'].nunique()
-# 23 Unique topics (delays: 9023, none: 2304, service: 884, station: 754, ..., brakes: 44, roof: 15, handrails: 2)
-count_missing(tweets,'topic')
-# no missing value
+# Data Preparation
+# Merge location columns into one
+source_col_loc = tweets.columns.get_loc('flag_station')
+tweets['location'] = tweets.iloc[:, source_col_loc+1:source_col_loc+3].apply(lambda x: ','.join(x[x.str.len()>0].astype(str)), axis = 1)
+# Extract location data in a separate dataframe
+tweets_loc = tweets[['tweet_id', 'longitude', 'latitude', 'location']]
+# Remove unwanted columns to reduce data processing time
+tweets = tweets.drop(['source', 'source_id', 'language', 'relevant', 'ground_truth','user_id',
+                      'month', 'year', 'week', 'weekday', 'longitude', 'latitude', 'location',
+                      'flag_station', 'flag_line', 'flag_line', 'flag_line_start', 'flag_line_end'], axis = 1)
+# Transform sentiment to two-class feature with negative and non-negative
+tweets['sentiment'].replace(['negative', 'neutral', 'positive'],
+                            [0, 1, 1], inplace = True)
+# Rename/merge topics
+tweets['topic'].replace(['tickets/seat_reservations', 'air conditioning'],
+                        ['tickets', 'hvac'], inplace = True)
 
-# Most frequent topic by year
-created_topic_y = tweets.groupby(['year', 'topic']).size().reset_index(name='count').sort_values(by=['year', 'count'], ascending=[True, False])
-# 'Delays' is the most frequent in both years by far, followed by 'none'. 'Covid' is 3rd in 2020.
-# Most frequent topic by month and year
-created_topic_my = tweets.groupby(['year', 'month', 'topic']).size().reset_index(name='count')\
-    .sort_values(by=['year', 'month', 'count'], ascending=[True, True, False]).groupby(['year', 'month']).head(1)
-# 'Delays' is the most prominent topic throughout 2019. In 2020, 'Delays' and 'Covid' are most frequent.
-# Most frequent topic by weekday
-created_topic_dy = tweets.groupby(['year','weekday', 'topic']).size().reset_index(name='count')\
-    .sort_values(by=['year','weekday', 'count'], ascending=[True, True, False]).groupby(['year', 'weekday']).head(1)
-# Most frequent weekday by topic
-created_topic_d = tweets.groupby(['topic', 'weekday']).size().reset_index(name='count').sort_values(by=['topic', 'count'],
-    ascending=[False, False]).groupby(['topic']).head(1).sort_values(by='count', ascending=False)
-# Delays are reported the most on Wednesday, All topics are most reported during weekdays.
+# Prepare text
+tweets['text'] = tweets['text'].astype(str)
+tweets['text'] = tweets['text'].str.lower()
+tweets['text'] = tweets['text'].replace(r'\W+', ' ', regex=True)
+tweets['text'] = tweets['text'].replace(r'\d', ' ', regex=True)
+#nltk.download('averaged_perceptron_tagger')
+tweets['tokens'] = tweets.apply(lambda row: nltk.word_tokenize(row['text']), axis=1)
+tweets['tokens_tagged'] = tweets['tokens'].apply(nltk.pos_tag)
 
-# Number of topics per tweet
-topic_tweet = tweets.groupby(['tweet_id'])['topic'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
-# Most number of topics for one tweet is 4.
-topic_tweet_sum = topic_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
-# Tweets with 4 topics = 3 (0.02%), Tweets with 3 topics = 52 (0.3%), Tweets with 2 topics = 849 (5.5%), 96% has 1 topic per tweet.
-#barchart_y = sns.barplot(data=topic_tweet_sum, x='count', y='sum', hue='year', palette='dark:#E21185')
-#barchart_y.set(xlabel='Number of topics per tweet', ylabel='Number of tweets', title='Number of topics per tweet')
+# Function to update POS tags in each list
+def update_pos_tags(row):
+    lemmatizer = WordNetLemmatizer()
+    updated_list = [(token, get_updated_pos(pos)) for token, pos in row]
+    return updated_list
 
+# Function to map POS tags to accepted values for lemmatize function
+def get_updated_pos(pos):
+    if pos.startswith('N'):
+        return 'n'  # Noun
+    elif pos.startswith('V'):
+        return 'v'  # Verb
+    elif pos.startswith('R'):
+        return 'r'  # Adverb
+    elif pos.startswith('J'):
+        return 'a'  # Adjective
+    else:
+        return None  # Return None for other cases
 
-# Sentiment
-sentiment = tweets.groupby(['sentiment'])['topic'].count().sort_values(ascending=False)
-sentiment_desc = tweets['sentiment'].nunique()
-# 3 Sentiments ; Negative: 10628 (64.4%) , Neutral: 6079 (36.9%) , Positive: 272 (1.6%)
-count_missing(tweets,'sentiment')
-# no missing value
+# Apply the update_pos_tags function to the 'tokens_tagged' column
+tweets['tokens_tagged'] = tweets['tokens_tagged'].apply(update_pos_tags)
 
-# Number of sentiments per tweet/topic
-sentiment_tweet = tweets.groupby(['tweet_id'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
-sentiment_tweet_sum = sentiment_tweet.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
-# 32 Tweets with 2 sentiments, other than that one sentiment per tweet.
-sentiment_topic = tweets.groupby(['id_topic'])['sentiment'].nunique().reset_index(name='count').sort_values(by=['count'], ascending=[False])
-sentiment_topic_sum = sentiment_topic.groupby(['count']).size().reset_index(name='sum').sort_values(by='sum', ascending=True)
-# 20 Unique topics with 2 sentiments, other than that one sentiment per unique topic.
+def lemmatize_tokens(tokens_tagged):
+    lemmatizer = WordNetLemmatizer()
+    lemmatized_list = [(lemmatizer.lemmatize(token, pos=pos_tag) if pos_tag is not None else token) for token, pos_tag in tokens_tagged]
+    return lemmatized_list
 
-# Sentiment associated with topics
-sentimental_topic = tweets.groupby(['topic', 'sentiment'])['sentiment'].count().sort_values(ascending=False)
-# Delays: negative: 5851, neutral: 3156
-# None: neutral: 1206, negative: 1053, positive: 45
-# Service: negative: 605, neutral: 249, ...
+# Apply the lemmatize_tokens function to the 'token_pos_list' column
+tweets['tokens_lem'] = tweets['tokens_tagged'].apply(lemmatize_tokens)
+def remove_stopwords(tokens_lem):
+    sw = nltk.corpus.stopwords.words('english')
+    filtered_tokens = [token for token in tokens_lem if token not in sw]
+    return filtered_tokens
+tweets['filtered_tokens'] = tweets['tokens_lem'].apply(remove_stopwords)
+tweets = tweets.drop(['text', 'tokens', 'tokens_tagged', 'tokens_lem'], axis = 1)
+
+def tokens_to_string(filtered_tokens):
+    return ' '.join([token for token in filtered_tokens])
+tweets['text'] = tweets['filtered_tokens'].apply(tokens_to_string)
+
+# Split data for topic classification
+topics = tweets['topic'][1:]
+texts = tweets['text']
+# Vectorize texts into numeric values
+from sklearn.feature_extraction.text import TfidfVectorizer
+vectorizer = TfidfVectorizer()
+vectors = vectorizer.fit_transform(texts)
+# Split data into training and testing
+vectors_train, vectors_test, topics_train, topics_test = train_test_split(vectors, topics, test_size = 0.2, random_state= 42, stratify=topics)
 
