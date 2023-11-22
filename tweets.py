@@ -514,7 +514,7 @@ tweets['text'] = tweets['text'].astype(str)
 tweets['text'] = tweets['text'].str.lower()
 tweets['text'] = tweets['text'].replace(r'\W+', ' ', regex=True)
 tweets['text'] = tweets['text'].replace(r'\d', ' ', regex=True)
-#nltk.download('averaged_perceptron_tagger')
+# nltk.download('averaged_perceptron_tagger')
 tweets['tokens'] = tweets.apply(lambda row: nltk.word_tokenize(row['text']), axis=1)
 tweets['tokens_tagged'] = tweets['tokens'].apply(nltk.pos_tag)
 
@@ -568,3 +568,103 @@ vectors = vectorizer.fit_transform(texts)
 # Split data into training and testing
 vectors_train, vectors_test, topics_train, topics_test = train_test_split(vectors, topics, test_size = 0.2, random_state= 42, stratify=topics)
 
+# Split data for sentiment analysis
+sentiments = tweets['sentiment'][0:]
+texts = tweets['text']
+# Vectorize texts into numeric values
+from sklearn.feature_extraction.text import TfidfVectorizer
+vectorizer = TfidfVectorizer()
+vectors = vectorizer.fit_transform(texts)
+# Split data into training and testing
+vectors_train, vectors_test, sentiments_train, sentiments_test = train_test_split(vectors, sentiments, test_size = 0.2, random_state= 42, stratify=sentiments)
+
+# Check frequency Distribution of training data
+freq_dist_sentiments_train = sentiments_train.value_counts()
+# Negative sentiment = 63%, Non-negative sentiment = 37%
+
+# Check frequency Distribution of test data
+freq_dist_sentiments_test = sentiments_test.value_counts()
+# Negative sentiment = 63%, Non-negative sentiment = 37%
+
+# Import models from sklearn
+from sklearn.svm import LinearSVC
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, classification_report
+
+# Function to measure the performance of a model to show accuracy score, confusion matrix and ROC-AUC Curve
+def model_Evaluate(model):
+    # Predict values for Test dataset
+    y_pred = model.predict(vectors_test)
+    # Print the evaluation metrics for the dataset.
+    print(classification_report(sentiments_test, y_pred))
+    # Compute and plot the Confusion matrix
+    cf_matrix = confusion_matrix(sentiments_test, y_pred)
+    categories = ['Negative','Positive']
+    group_names = ['True Neg','False Pos', 'False Neg','True Pos']
+    group_percentages = ['{0:.2%}'.format(value) for value in cf_matrix.flatten() / np.sum(cf_matrix)]
+    labels = [f'{v1}n{v2}' for v1, v2 in zip(group_names,group_percentages)]
+    labels = np.asarray(labels).reshape(2,2)
+    sns.heatmap(cf_matrix, annot = labels, cmap = 'Blues',fmt = '',
+    xticklabels = categories, yticklabels = categories)
+    plt.xlabel("Predicted values", fontdict = {'size':14}, labelpad = 10)
+    plt.ylabel("Actual values" , fontdict = {'size':14}, labelpad = 10)
+    plt.title ("Confusion Matrix", fontdict = {'size':18}, pad = 20)
+
+# Model-1 : Naive Bayes classifier
+BNBmodel = BernoulliNB()
+BNBmodel.fit(vectors_train, sentiments_train)
+model_Evaluate(BNBmodel)
+sentiments_pred1 = BNBmodel.predict(vectors_test)
+
+# ROC-AUC Curve for Model-1
+#from sklearn.metrics import roc_curve, auc
+#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred1)
+#roc_auc = auc(fpr, tpr)
+#plt.figure()
+#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('ROC CURVE')
+#plt.legend(loc="lower right")
+#plt.show()
+
+# Model-2 : Linear Support Vector Classification
+SVCmodel = LinearSVC()
+SVCmodel.fit(vectors_train, sentiments_train)
+model_Evaluate(SVCmodel)
+sentiments_pred2 = SVCmodel.predict(vectors_test)
+
+# ROC-AUC Curve for Model-2
+#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred2)
+#roc_auc = auc(fpr, tpr)
+#plt.figure()
+#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('ROC CURVE')
+#plt.legend(loc="lower right")
+#plt.show()
+
+# Model-3 : Logistic Regression
+LRmodel = LogisticRegression(C = 2, max_iter = 1000, n_jobs=-1)
+LRmodel.fit(vectors_train, sentiments_train)
+model_Evaluate(LRmodel)
+sentiments_pred3 = LRmodel.predict(vectors_test)
+
+# ROC-AUC Curve for Model-3
+#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred3)
+#roc_auc = auc(fpr, tpr)
+#plt.figure()
+#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('ROC CURVE')
+#plt.legend(loc="lower right")
+#plt.show()
