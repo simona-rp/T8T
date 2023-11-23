@@ -568,6 +568,49 @@ vectors = vectorizer.fit_transform(texts)
 # Split data into training and testing
 vectors_train, vectors_test, topics_train, topics_test = train_test_split(vectors, topics, test_size = 0.2, random_state= 42, stratify=topics)
 
+# Setup OpenAI API
+from openai import OpenAI
+# client = OpenAI(
+#     # defaults to os.environ.get("OPENAI_API_KEY")
+#     api_key="add-your-API-key-here"
+# )
+
+# Define prompts
+texts_sam = pd.read_excel('sample.xlsx').head(20)
+texts_sam_api = texts_sam['text']
+prompt_topic = [f"Please classify the topic of the following text by providing a single answer in lowercase " \
+          f"and using ONLY one of the words 'delays', 'service', 'station', 'wifi', 'train', 'covid', " \
+          f"'announcements', 'seats', 'toilets', 'vandalism', 'tickets', ' hvac', 'doors', 'tables', 'plugs', " \
+          f"'noise', 'windows', 'floor', 'brakes', 'roof' or 'handrails':\n\n{text}" for text in texts_sam_api]
+prompt_sentiment = [f"Please identify the sentiment of the following text as negative or non-negative " \
+                    f"and provide a single numeric answer with 0 for negative and 1 for non-negative:\n\n{text}" for text in texts_sam_api]
+# Get response
+response = client.completions.create(
+    model="gpt-3.5-turbo-instruct",
+    prompt=prompt_topic,
+    temperature=0.2,
+    stop=None,
+)
+response2 = client.completions.create(
+    model="gpt-3.5-turbo-instruct",
+    prompt=prompt_sentiment,
+    temperature=0.2,
+    stop=None,
+)
+# Format response
+# Topic
+response_choices = pd.DataFrame(response.choices, columns=[['col1', 'col2', 'col3', 'topic']])
+response_choices['topic'] = response_choices['topic'].astype(str)
+response_choices['topic'] = response_choices['topic'].replace(r'\W+', ' ', regex=True)
+response_choices['topic'] = response_choices['topic'].replace(r'text\s*n\s*n', ' ', regex=True)
+# Sentiment
+response2_choices = pd.DataFrame(response2.choices, columns=[['col1', 'col2', 'col3', 'sentiment']])
+response2_choices['sentiment'] = response2_choices['sentiment'].astype(str)
+response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'\W+', ' ', regex=True)
+response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'text\s*n\s*n', ' ', regex=True)
+
+
+
 # Split data for sentiment analysis
 sentiments = tweets['sentiment'][0:]
 texts = tweets['text']
