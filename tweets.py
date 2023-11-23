@@ -629,11 +629,41 @@ freq_dist_sentiments_train = sentiments_train.value_counts()
 freq_dist_sentiments_test = sentiments_test.value_counts()
 # Negative sentiment = 63%, Non-negative sentiment = 37%
 
+# Training Set Balancing
+
+# 1. Oversampling
+# Import necessary library
+from imblearn.over_sampling import RandomOverSampler
+from collections import Counter
+ros = RandomOverSampler(random_state=42)
+
+# Fit predictor and target variable
+vectors_train_ros, sentiments_train_ros = ros.fit_resample(vectors_train, sentiments_train)
+
+print('Original dataset shape', Counter(sentiments_train))
+print('Resample dataset shape', Counter(sentiments_train_ros))
+
+# 2. SMOTE
+# Import necessary library
+from imblearn.over_sampling import SMOTE
+smote = SMOTE(random_state=42)
+
+# Fit predictor and target variable
+vectors_train_smote, sentiments_train_smote = smote.fit_resample(vectors_train, sentiments_train)
+
+print('Original dataset shape', Counter(sentiments_train))
+print('Resample dataset shape', Counter(sentiments_train_smote))
+
+
+# Data Modeling : Sensitivity Analysis
+
 # Import models from sklearn
-from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.model_selection import GridSearchCV
 
 # Function to measure the performance of a model to show accuracy score, confusion matrix and ROC-AUC Curve
 def model_Evaluate(model):
@@ -654,11 +684,12 @@ def model_Evaluate(model):
     plt.ylabel("Actual values" , fontdict = {'size':14}, labelpad = 10)
     plt.title ("Confusion Matrix", fontdict = {'size':18}, pad = 20)
 
-# Model-1 : Naive Bayes classifier
+# Model-1 : Naive Bayes classifier - Unbalanced
 BNBmodel = BernoulliNB()
 BNBmodel.fit(vectors_train, sentiments_train)
 model_Evaluate(BNBmodel)
 sentiments_pred1 = BNBmodel.predict(vectors_test)
+# Precision: 0.71, Recall: 0.72, F1 Score: 0.71
 
 # ROC-AUC Curve for Model-1
 #from sklearn.metrics import roc_curve, auc
@@ -673,12 +704,14 @@ sentiments_pred1 = BNBmodel.predict(vectors_test)
 #plt.title('ROC CURVE')
 #plt.legend(loc="lower right")
 #plt.show()
+# ROC Curve Area: 0.68
 
-# Model-2 : Linear Support Vector Classification
-SVCmodel = LinearSVC()
+# Model-2 : Polynomial Support Vector Classification - Unbalanced
+SVCmodel = SVC(kernel='ploy')
 SVCmodel.fit(vectors_train, sentiments_train)
 model_Evaluate(SVCmodel)
 sentiments_pred2 = SVCmodel.predict(vectors_test)
+# Precision: 0.75, Recall: 0.72, F1 Score: 0.68
 
 # ROC-AUC Curve for Model-2
 #fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred2)
@@ -692,12 +725,14 @@ sentiments_pred2 = SVCmodel.predict(vectors_test)
 #plt.title('ROC CURVE')
 #plt.legend(loc="lower right")
 #plt.show()
+# ROC Curve Area: 0.64
 
-# Model-3 : Logistic Regression
-LRmodel = LogisticRegression(C = 2, max_iter = 1000, n_jobs=-1)
-LRmodel.fit(vectors_train, sentiments_train)
-model_Evaluate(LRmodel)
-sentiments_pred3 = LRmodel.predict(vectors_test)
+# Model-3 : RBF Support Vector Classification - SMOTE Balanced
+SVCmodel = SVC(kernel='rbf')
+SVCmodel.fit(vectors_train_smote, sentiments_train_smote)
+model_Evaluate(SVCmodel)
+sentiments_pred3 = SVCmodel.predict(vectors_test)
+# Precision: 0.74, Recall: 0.74, F1 Score: 0.72
 
 # ROC-AUC Curve for Model-3
 #fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred3)
@@ -711,3 +746,67 @@ sentiments_pred3 = LRmodel.predict(vectors_test)
 #plt.title('ROC CURVE')
 #plt.legend(loc="lower right")
 #plt.show()
+# ROC Curve Area: 0.67
+
+# Model-4 : Logistic Regression - Unbalanced
+LRmodel = LogisticRegression(C = 2, max_iter = 1000, n_jobs=-1)
+LRmodel.fit(vectors_train, sentiments_train)
+model_Evaluate(LRmodel)
+sentiments_pred4 = LRmodel.predict(vectors_test)
+# Precision: 0.72, Recall: 0.73, F1 Score: 0.72
+
+# ROC-AUC Curve for Model-4
+#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred4)
+#roc_auc = auc(fpr, tpr)
+#plt.figure()
+#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('ROC CURVE')
+#plt.legend(loc="lower right")
+#plt.show()
+# ROC Curve Area: 0.69
+
+# Model-5 : Random Forest - Unbalanced, Grid-Searched
+RFmodel = RandomForestClassifier(n_estimators=100, random_state=42)
+
+#Performing Grid Search
+# Define the hyperparameters grid to search through
+#param_grid = {
+#    'n_estimators': [100, 200, 300],
+#    'max_depth': [None, 5, 10, 15],
+#    'min_samples_split': [2, 5, 10],
+#    'min_samples_leaf': [1, 2, 4]
+#}
+
+# Perform grid search with cross-validation
+#GridSearchRF = GridSearchCV(estimator=RFmodel,param_grid= param_grid , cv=5, scoring='accuracy', n_jobs=-1)
+#GridSearchRF.fit(vectors_train, sentiments_train)
+
+# Get the best parameters found by grid search
+#Best_params = GridSearchRF.best_params_
+#print("Best Parameters:", Best_params)
+#BestRF = GridSearchRF.best_estimator_
+# Best Parameters: {'max_depth': None, 'min_samples_leaf': 1, 'min_samples_split': 5, 'n_estimators': 300}
+
+# Fit and evaluate RF model
+RFmodel.fit(vectors_train, sentiments_train)
+model_Evaluate(RFmodel)
+sentiments_pred5 = RFmodel.predict(vectors_test)
+# Precision: 0.75, Recall: 0.74, F1 Score: 0.72
+
+# ROC-AUC Curve for Model-5
+#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred5)
+#roc_auc = auc(fpr, tpr)
+#plt.figure()
+#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+#plt.xlim([0.0, 1.0])
+#plt.ylim([0.0, 1.05])
+#plt.xlabel('False Positive Rate')
+#plt.ylabel('True Positive Rate')
+#plt.title('ROC CURVE')
+#plt.legend(loc="lower right")
+#plt.show()
+# ROC Curve Area: 0.71
