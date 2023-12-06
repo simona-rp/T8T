@@ -1,0 +1,9 @@
+
+results/checkpoint-500/trainer_state.json
+*.bin
+results/checkpoint-500/trainer_state.json
+results/checkpoint-500/scheduler.pt
+results/checkpoint-500/rng_state.pth
+results/checkpoint-500/optimizer.pt
+results/checkpoint-500/model.safetensors
+results/checkpoint-500/config.json
