@@ -498,9 +498,11 @@ source_col_loc = tweets.columns.get_loc('flag_station')
 tweets['location'] = tweets.iloc[:, source_col_loc+1:source_col_loc+3].apply(lambda x: ','.join(x[x.str.len()>0].astype(str)), axis = 1)
 # Extract location data in a separate dataframe
 tweets_loc = tweets[['tweet_id', 'longitude', 'latitude', 'location']]
+# Extract original text in separate dataframe
+tweets_text['text_tweet'] = tweets['text']
 # Remove unwanted columns to reduce data processing time
 tweets = tweets.drop(['source', 'source_id', 'language', 'relevant', 'ground_truth','user_id',
-                      'month', 'year', 'week', 'weekday', 'longitude', 'latitude', 'location',
+                      'longitude', 'latitude', 'location',
                       'flag_station', 'flag_line', 'flag_line', 'flag_line_start', 'flag_line_end'], axis = 1)
 # Transform sentiment to two-class feature with negative and non-negative
 tweets['sentiment'].replace(['negative', 'neutral', 'positive'],
@@ -575,7 +577,6 @@ np.random.seed(37)
 
 # Split data for topic classification
 topics = tweets['topic']
-topics = tweets['topic'][0:]
 texts = tweets['text']
 # Vectorize texts into numeric values
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -584,25 +585,24 @@ vectors = vectorizer.fit_transform(texts)
 # Split data into training and testing
 vectors_train, vectors_test, topics_train, topics_test = train_test_split(vectors, topics, test_size = 0.2, random_state= 42, stratify=topics)
 
-# Bayes
+# # Bayes
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import make_pipeline
-from sklearn.metrics import confusion_matrix, accuracy_score
-from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 from sklearn.model_selection import GridSearchCV
-# Model building
-model_mnb = MultinomialNB(alpha = 0.1)
-# Training the model with the training data
-model_mnb.fit(vectors_train, topics_train)
-topics_pred_mnb = model_mnb.predict(vectors_test)
-print(classification_report(topics_test, topics_pred_mnb))
+# # Model building
+# model_mnb = MultinomialNB(alpha = 0.1)
+# # Training the model with the training data
+# model_mnb.fit(vectors_train, topics_train)
+# topics_pred_mnb = model_mnb.predict(vectors_test)
+# print(classification_report(topics_test, topics_pred_mnb))
 
-# Grid search
-param_grid = {'alpha': [0.1, 0.3, 0.5, 1.0]}
-grid_search = GridSearchCV(MultinomialNB(), param_grid, cv=5, scoring = 'accuracy')
-grid_search.fit(vectors_train, topics_train)
-# print("Best Parameters:", grid_search.best_params_)
-# Best value for alpha: alpha = 0.1
+# # Grid search
+# param_grid = {'alpha': [0.1, 0.3, 0.5, 1.0]}
+# grid_search = GridSearchCV(MultinomialNB(), param_grid, cv=5, scoring = 'accuracy')
+# grid_search.fit(vectors_train, topics_train)
+# # print("Best Parameters:", grid_search.best_params_)
+# # Best value for alpha: alpha = 0.1
 
 # SVM
 from sklearn.svm import LinearSVC
@@ -623,12 +623,11 @@ best_model_svc.fit(vectors_train, topics_train)
 topics_pred_svc = best_model_svc.predict(vectors_test)
 print(classification_report(topics_test, topics_pred_svc))
 
-
 # Setup OpenAI API
 from openai import OpenAI
 client = OpenAI(
     # defaults to os.environ.get("OPENAI_API_KEY")
-    api_key="your-API-key-here")
+    api_key="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")
 
 # Define prompts
 texts_sam = pd.read_excel('sample.xlsx')
@@ -638,12 +637,12 @@ prompt_topic = [f"Please classify the topic of the following text by providing a
                 f"and using ONLY one of the words 'service', 'wifi', 'seats', 'toilets', 'vandalism'," \
                 f"'hvac', 'doors', 'tables', 'plugs', 'noise', 'windows', 'floor', 'brakes', 'roof' or " \
                 f"'handrails':\n\n{text}" for text in texts_api]
-prompt_summarize = [f"Please summarize following text with a single word in lowercase " \
-                f"and using ONLY one of the words 'service', 'wifi', 'seats', 'toilets', 'vandalism'," \
-                f"'hvac', 'doors', 'tables', 'plugs', 'noise', 'windows', 'floor', 'brakes', 'roof' or " \
-                f"'handrails':\n\n{text}" for text in texts_api]
-prompt_sentiment = [f"Please identify the sentiment of the following text as negative or non-negative " \
-                    f"and provide a single numeric answer with 0 for negative and 1 for non-negative:\n\n{text}" for text in texts_api]
+# prompt_summarize = [f"Please summarize following text with a single word in lowercase " \
+#                 f"and using ONLY one of the words 'service', 'wifi', 'seats', 'toilets', 'vandalism'," \
+#                 f"'hvac', 'doors', 'tables', 'plugs', 'noise', 'windows', 'floor', 'brakes', 'roof' or " \
+#                 f"'handrails':\n\n{text}" for text in texts_api]
+# prompt_sentiment = [f"Please identify the sentiment of the following text as negative or non-negative " \
+#                     f"and provide a single numeric answer with 0 for negative and 1 for non-negative:\n\n{text}" for text in texts_api]
 # Get response
 response = client.completions.create(
     model="gpt-3.5-turbo-instruct",
@@ -651,119 +650,119 @@ response = client.completions.create(
     temperature=0.2,
     stop=None,
 )
-response1 = client.completions.create(
-    model="gpt-3.5-turbo-instruct",
-    prompt=prompt_summarize,
-    temperature=0.2,
-    stop=None,
-)
-response2 = client.completions.create(
-    model="gpt-3.5-turbo-instruct",
-    prompt=prompt_sentiment,
-    temperature=0.2,
-    stop=None,
-)
-# Format response
-# Topic
-response_choices = pd.DataFrame(response.choices, columns=[['col1', 'col2', 'col3', 'topic']])
-response_choices['topic'] = response_choices['topic'].astype(str)
-response_choices['topic'] = response_choices['topic'].replace(r'\W+', ' ', regex=True)
-response_choices['topic'] = response_choices['topic'].replace(r'text\s*n\s*n', ' ', regex=True)
-# Topic
-response1_choices = pd.DataFrame(response1.choices, columns=[['col1', 'col2', 'col3', 'topic']])
-response1_choices['topic'] = response1_choices['topic'].astype(str)
-response1_choices['topic'] = response1_choices['topic'].replace(r'\W+', ' ', regex=True)
-response1_choices['topic'] = response1_choices['topic'].replace(r'text\s*n\s*n', ' ', regex=True)
-# Sentiment
-response2_choices = pd.DataFrame(response2.choices, columns=[['col1', 'col2', 'col3', 'sentiment']])
-response2_choices['sentiment'] = response2_choices['sentiment'].astype(str)
-response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'\W+', ' ', regex=True)
-response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'text\s*n\s*n', ' ', regex=True)
-print(response_choices['topic'])
-print(response1_choices['topic'])
-print(response2_choices['sentiment'])
+# response1 = client.completions.create(
+#     model="gpt-3.5-turbo-instruct",
+#     prompt=prompt_summarize,
+#     temperature=0.2,
+#     stop=None,
+# )
+# response2 = client.completions.create(
+#     model="gpt-3.5-turbo-instruct",
+#     prompt=prompt_sentiment,
+#     temperature=0.2,
+#     stop=None,
+# )
+# # Format response
+# # Topic
+# response_choices = pd.DataFrame(response.choices, columns=[['col1', 'col2', 'col3', 'topic']])
+# response_choices['topic'] = response_choices['topic'].astype(str)
+# response_choices['topic'] = response_choices['topic'].replace(r'\W+', ' ', regex=True)
+# response_choices['topic'] = response_choices['topic'].replace(r'text\s*n\s*n', ' ', regex=True)
+# # Topic
+# response1_choices = pd.DataFrame(response1.choices, columns=[['col1', 'col2', 'col3', 'topic']])
+# response1_choices['topic'] = response1_choices['topic'].astype(str)
+# response1_choices['topic'] = response1_choices['topic'].replace(r'\W+', ' ', regex=True)
+# response1_choices['topic'] = response1_choices['topic'].replace(r'text\s*n\s*n', ' ', regex=True)
+# # Sentiment
+# response2_choices = pd.DataFrame(response2.choices, columns=[['col1', 'col2', 'col3', 'sentiment']])
+# response2_choices['sentiment'] = response2_choices['sentiment'].astype(str)
+# response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'\W+', ' ', regex=True)
+# response2_choices['sentiment'] = response2_choices['sentiment'].replace(r'text\s*n\s*n', ' ', regex=True)
+# print(response_choices['topic'])
+# print(response1_choices['topic'])
+# print(response2_choices['sentiment'])
 
 
-# Pre-trained model
-import torch
-import torch.nn as nn
-from transformers import BartTokenizer, BartForSequenceClassification, BartConfig
-from transformers import Trainer, TrainingArguments
-from sklearn.preprocessing import LabelEncoder
-# Sample data
-# Setting the seed for python random numbers
-random.seed(13747)
-# Setting the seed for numpy-generated random numbers
-np.random.seed(37)
-texts_train, texts_test, topics_train, topics_test = train_test_split(texts, topics, test_size = 0.2, random_state= 42, stratify=topics)
-texts_train = texts_train.head(100).values.tolist()
-texts_test = texts_test.head(100).values.tolist()
-# Encode topic labels
-topics_train = topics_train.head(100).values.tolist()
-topics_test = topics_test.head(100).values.tolist()
-label_encoder = LabelEncoder()
-topics_train = label_encoder.fit_transform(topics_train)
-topics_test = label_encoder.fit_transform(topics_test)
-# training texts = vectors_train
-# training labels = topics_train
-# Tokenize
-tokenizer = BartTokenizer.from_pretrained('facebook/bart-large-mnli')
-train_encodings = tokenizer(texts_train, truncation=True, padding=True)
-# Create a PyTorch dataset
-class TopicDataset(torch.utils.data.Dataset):
-# The __init__ function is run once when instantiating a Dataset object
-    def __init__(self, encodings, labels):
-        self.encodings = encodings
-        self.labels = labels
-# The __getitem__ function retrieves individual samples
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
-        return item
-# The __len__ function returns/determines the number of samples in the dataset
-# In this case based on the topic labels
-    def __len__(self):
-        return len(self.labels)
-train = TopicDataset(train_encodings, topics_train)
+# # Pre-trained model
+# import torch
+# import torch.nn as nn
+# from transformers import BartTokenizer, BartForSequenceClassification, BartConfig
+# from transformers import Trainer, TrainingArguments
+# from sklearn.preprocessing import LabelEncoder
+# # Sample data
+# # Setting the seed for python random numbers
+# random.seed(13747)
+# # Setting the seed for numpy-generated random numbers
+# np.random.seed(37)
+# texts_train, texts_test, topics_train, topics_test = train_test_split(texts, topics, test_size = 0.2, random_state= 42, stratify=topics)
+# texts_train = texts_train.head(100).values.tolist()
+# texts_test = texts_test.head(100).values.tolist()
+# # Encode topic labels
+# topics_train = topics_train.head(100).values.tolist()
+# topics_test = topics_test.head(100).values.tolist()
+# label_encoder = LabelEncoder()
+# topics_train = label_encoder.fit_transform(topics_train)
+# topics_test = label_encoder.fit_transform(topics_test)
+# # training texts = vectors_train
+# # training labels = topics_train
+# # Tokenize
+# tokenizer = BartTokenizer.from_pretrained('facebook/bart-large-mnli')
+# train_encodings = tokenizer(texts_train, truncation=True, padding=True)
+# # Create a PyTorch dataset
+# class TopicDataset(torch.utils.data.Dataset):
+# # The __init__ function is run once when instantiating a Dataset object
+#     def __init__(self, encodings, labels):
+#         self.encodings = encodings
+#         self.labels = labels
+# # The __getitem__ function retrieves individual samples
+#     def __getitem__(self, idx):
+#         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+#         item['labels'] = torch.tensor(self.labels[idx])
+#         return item
+# # The __len__ function returns/determines the number of samples in the dataset
+# # In this case based on the topic labels
+#     def __len__(self):
+#         return len(self.labels)
+# train = TopicDataset(train_encodings, topics_train)
 
-# Fine-tune the BART model
-num_classes = 16
-config = BartConfig.from_pretrained('facebook/bart-large-mnli')
-model = BartForSequenceClassification.from_pretrained('facebook/bart-large-mnli')
-# Customize the classification head
-model.config.num_labels = num_classes
-new_classification_head = nn.Linear(config.d_model, num_classes)
-model.classification_head = new_classification_head
-# Optionally, initialize the weights of the new head
-nn.init.xavier_uniform_(model.classification_head.weight)
-nn.init.constant_(model.classification_head.bias, 0.0)
-training_args = TrainingArguments(
-    output_dir='./results',
-    num_train_epochs=3,
-    per_device_train_batch_size=8,
-    warmup_steps=500,
-    weight_decay=0.01,
-    logging_dir='./logs')
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=train)
-trainer.train()
+# # Fine-tune the BART model
+# num_classes = 16
+# config = BartConfig.from_pretrained('facebook/bart-large-mnli')
+# model = BartForSequenceClassification.from_pretrained('facebook/bart-large-mnli')
+# # Customize the classification head
+# model.config.num_labels = num_classes
+# new_classification_head = nn.Linear(config.d_model, num_classes)
+# model.classification_head = new_classification_head
+# # Optionally, initialize the weights of the new head
+# nn.init.xavier_uniform_(model.classification_head.weight)
+# nn.init.constant_(model.classification_head.bias, 0.0)
+# training_args = TrainingArguments(
+#     output_dir='./results',
+#     num_train_epochs=3,
+#     per_device_train_batch_size=8,
+#     warmup_steps=500,
+#     weight_decay=0.01,
+#     logging_dir='./logs')
+# trainer = Trainer(
+#     model=model,
+#     args=training_args,
+#     train_dataset=train)
+# trainer.train()
 
-# Tokenize the test data
-test_encodings = tokenizer(texts_test, truncation=True, padding=True)
+# # Tokenize the test data
+# test_encodings = tokenizer(texts_test, truncation=True, padding=True)
 
-# Create a PyTorch dataset for the test set
-test = TopicDataset(test_encodings, topics_test)
+# # Create a PyTorch dataset for the test set
+# test = TopicDataset(test_encodings, topics_test)
 
-# Evaluate the model on the test set
-results = trainer.predict(test)
-raw_outputs = results.predictions[0]
-predictions = torch.argmax(torch.from_numpy(raw_outputs), axis=1).numpy()
-print(predictions)
+# # Evaluate the model on the test set
+# results = trainer.predict(test)
+# raw_outputs = results.predictions[0]
+# predictions = torch.argmax(torch.from_numpy(raw_outputs), axis=1).numpy()
+# print(predictions)
 
 # Split data for sentiment analysis
-sentiments = tweets['sentiment'][0:]
+sentiments = tweets['sentiment']
 texts = tweets['text']
 # Vectorize texts into numeric values
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -813,24 +812,22 @@ from sklearn.svm import SVC
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.model_selection import GridSearchCV
 
 # Function to measure the performance of a model to show accuracy score, confusion matrix and ROC-AUC Curve
-def model_Evaluate(model):
+def model_Evaluate(model, test_data):
     # Predict values for Test dataset
-    y_pred = model.predict(vectors_test)
+    y_pred = model.predict(test_data)
     # Print the evaluation metrics for the dataset.
     print(classification_report(sentiments_test, y_pred))
     # Compute and plot the Confusion matrix
     cf_matrix = confusion_matrix(sentiments_test, y_pred)
     categories = ['Negative','Positive']
-    group_names = ['True Neg','False Pos', 'False Neg','True Pos']
+    group_names = ['True Neg','False Pos','False Neg','True Pos']
     group_percentages = ['{0:.2%}'.format(value) for value in cf_matrix.flatten() / np.sum(cf_matrix)]
     labels = [f'{v1}n{v2}' for v1, v2 in zip(group_names,group_percentages)]
     labels = np.asarray(labels).reshape(2,2)
     sns.heatmap(cf_matrix, annot = labels, cmap = 'Blues',fmt = '',
-    xticklabels = categories, yticklabels = categories)
+                xticklabels = categories, yticklabels = categories)
     plt.xlabel("Predicted values", fontdict = {'size':14}, labelpad = 10)
     plt.ylabel("Actual values" , fontdict = {'size':14}, labelpad = 10)
     plt.title ("Confusion Matrix", fontdict = {'size':18}, pad = 20)
@@ -838,20 +835,20 @@ def model_Evaluate(model):
 # Model-1 : Naive Bayes classifier - Unbalanced
 
 # Grid Search for Naive Bayes
-param_grid = {'alpha': [0.1, 0.3, 0.5, 1.0]}
-grid_search_nb = GridSearchCV(BernoulliNB(), param_grid, cv=5, scoring = 'accuracy')
-grid_search_nb.fit(vectors_train, sentiments_train)
-print("Best Parameters:", grid_search_nb.best_params_)
-# Best value for alpha: alpha = 0.1
-BestNB = grid_search_nb.best_estimator_
+# param_grid = {'alpha': [0.1, 0.3, 0.5, 1.0]}
+# grid_search_nb = GridSearchCV(BernoulliNB(), param_grid, cv=5, scoring = 'accuracy')
+# grid_search_nb.fit(vectors_train, sentiments_train)
+# print("Best Parameters:", grid_search_nb.best_params_)
+# # Best value for alpha: alpha = 0.1
+# BestNB = grid_search_nb.best_estimator_
 
-BestNB.fit(vectors_train, sentiments_train)
-model_Evaluate(BestNB)
-sentiments_pred1 = BestNB.predict(vectors_test)
+# BestNB.fit(vectors_train, sentiments_train)
+# model_Evaluate(BestNB)
+# sentiments_pred1 = BestNB.predict(vectors_test)
 # Precision: 0.72, Recall: 0.72, F1 Score: 0.72
 
 # ROC-AUC Curve for Model-1
-#from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc
 #fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred1)
 #roc_auc = auc(fpr, tpr)
 #plt.figure()
@@ -870,7 +867,7 @@ sentiments_pred1 = BestNB.predict(vectors_test)
 
 SVCmodel = SVC(kernel='poly')
 SVCmodel.fit(vectors_train, sentiments_train)
-model_Evaluate(SVCmodel)
+model_Evaluate(SVCmodel, vectors_test)
 sentiments_pred2 = SVCmodel.predict(vectors_test)
 # Precision: 0.75, Recall: 0.72, F1 Score: 0.68
 
@@ -891,31 +888,31 @@ best_model_svc = grid_search_svc.best_estimator_
 
 # Training the model with the training data
 best_model_svc.fit(vectors_train, sentiments_train)
-model_Evaluate(best_model_svc)
+model_Evaluate(best_model_svc, vectors_test)
 sentiments_pred2 = best_model_svc.predict(vectors_test)
 # Precision: 0.75, Recall: 0.73, F1 Score: 0.69
-
+print(classification_report(sentiments_test, sentiments_pred2))
 
 # ROC-AUC Curve for Model-2
-#fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred2)
-#roc_auc = auc(fpr, tpr)
-#plt.figure()
-#plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
-#plt.xlim([0.0, 1.0])
-#plt.ylim([0.0, 1.05])
-#plt.xlabel('False Positive Rate')
-#plt.ylabel('True Positive Rate')
-#plt.title('ROC CURVE')
-#plt.legend(loc="lower right")
-#plt.show()
+fpr, tpr, thresholds = roc_curve(sentiments_test, sentiments_pred2)
+roc_auc = auc(fpr, tpr)
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=1, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC CURVE')
+plt.legend(loc="lower right")
+plt.show()
 # ROC Curve Area: 0.64
 
 
 # Model-3 : Logistic Regression - Unbalanced
-LRmodel = LogisticRegression(C = 2, max_iter = 1000, n_jobs=-1)
-LRmodel.fit(vectors_train, sentiments_train)
-model_Evaluate(LRmodel)
-sentiments_pred4 = LRmodel.predict(vectors_test)
+# LRmodel = LogisticRegression(C = 2, max_iter = 1000, n_jobs=-1)
+# LRmodel.fit(vectors_train, sentiments_train)
+# model_Evaluate(LRmodel)
+# sentiments_pred4 = LRmodel.predict(vectors_test)
 # Precision: 0.72, Recall: 0.73, F1 Score: 0.72
 
 # ROC-AUC Curve for Model-4
@@ -933,7 +930,7 @@ sentiments_pred4 = LRmodel.predict(vectors_test)
 # ROC Curve Area: 0.69
 
 # Model-4 : Random Forest - Unbalanced, Grid-Searched
-RFmodel = RandomForestClassifier(n_estimators=100, random_state=42)
+# RFmodel = RandomForestClassifier(n_estimators=100, random_state=42)
 
 #Performing Grid Search
 # Define the hyperparameters grid to search through
@@ -955,9 +952,9 @@ RFmodel = RandomForestClassifier(n_estimators=100, random_state=42)
 # Best Parameters: {'max_depth': None, 'min_samples_leaf': 1, 'min_samples_split': 5, 'n_estimators': 300}
 
 # Fit and evaluate RF model
-RFmodel.fit(vectors_train, sentiments_train)
-model_Evaluate(RFmodel)
-sentiments_pred5 = RFmodel.predict(vectors_test)
+# RFmodel.fit(vectors_train, sentiments_train)
+# model_Evaluate(RFmodel)
+# sentiments_pred5 = RFmodel.predict(vectors_test)
 # Precision: 0.75, Recall: 0.74, F1 Score: 0.72
 
 # ROC-AUC Curve for Model-5
@@ -978,4 +975,3 @@ sentiments_pred5 = RFmodel.predict(vectors_test)
 # The best model for sentiment analysis is Model-2 Poly SVM model,
 # because of the high true negative rate and lowest false positive rate.
 
-# Test
